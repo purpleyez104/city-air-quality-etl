@@ -1,0 +1,79 @@
+CREATE TABLE IF NOT EXISTS raw_air_quality (
+    raw_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    snapshot_batch_id VARCHAR(64) NOT NULL,
+    source_id BIGINT NOT NULL,
+    city_code VARCHAR(12) NOT NULL,
+    city VARCHAR(32) NOT NULL,
+    source_area VARCHAR(64) NOT NULL,
+    business_date DATE NOT NULL,
+    source_time_point VARCHAR(64) NOT NULL,
+    source_time_point_text VARCHAR(32) NULL,
+    aqi DECIMAL(10, 2) NULL,
+    pm10 DECIMAL(10, 2) NULL,
+    pm2_5 DECIMAL(10, 2) NULL,
+    so2 DECIMAL(10, 2) NULL,
+    co DECIMAL(10, 2) NULL,
+    no2 DECIMAL(10, 2) NULL,
+    o3 DECIMAL(10, 2) NULL,
+    primary_pollutant VARCHAR(128) NULL,
+    quality VARCHAR(64) NULL,
+    health_advice TEXT NULL,
+    activity_advice TEXT NULL,
+    loaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (raw_id),
+    UNIQUE KEY uk_raw_source (city_code, source_id),
+    KEY idx_raw_business_key (city, business_date),
+    KEY idx_raw_batch (snapshot_batch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS air_quality (
+    city VARCHAR(32) NOT NULL,
+    business_date DATE NOT NULL,
+    aqi DECIMAL(10, 2) NULL,
+    pm10 DECIMAL(10, 2) NULL,
+    pm2_5 DECIMAL(10, 2) NULL,
+    so2 DECIMAL(10, 2) NULL,
+    co DECIMAL(10, 2) NULL,
+    no2 DECIMAL(10, 2) NULL,
+    o3 DECIMAL(10, 2) NULL,
+    primary_pollutant VARCHAR(128) NULL,
+    quality VARCHAR(64) NULL,
+    has_missing BOOLEAN NOT NULL DEFAULT FALSE,
+    source_raw_id BIGINT UNSIGNED NOT NULL,
+    etl_run_id CHAR(36) NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (city, business_date),
+    KEY idx_clean_run (etl_run_id),
+    CONSTRAINT fk_clean_raw FOREIGN KEY (source_raw_id) REFERENCES raw_air_quality(raw_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS air_quality_quality_log (
+    issue_key CHAR(64) NOT NULL,
+    etl_run_id CHAR(36) NOT NULL,
+    city VARCHAR(32) NOT NULL,
+    business_date DATE NOT NULL,
+    field_name VARCHAR(32) NOT NULL,
+    issue_code VARCHAR(32) NOT NULL,
+    severity VARCHAR(16) NOT NULL,
+    original_value VARCHAR(255) NULL,
+    message VARCHAR(512) NOT NULL,
+    first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (issue_key),
+    KEY idx_quality_run (etl_run_id),
+    KEY idx_quality_code (issue_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS air_quality_etl_runs (
+    run_id CHAR(36) NOT NULL,
+    snapshot_batch_id VARCHAR(64) NULL,
+    started_at DATETIME(6) NOT NULL,
+    finished_at DATETIME(6) NULL,
+    input_count INT NOT NULL DEFAULT 0,
+    output_count INT NOT NULL DEFAULT 0,
+    issue_count INT NOT NULL DEFAULT 0,
+    status VARCHAR(16) NOT NULL,
+    error_message VARCHAR(1000) NULL,
+    PRIMARY KEY (run_id),
+    KEY idx_run_batch (snapshot_batch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,0 +1,21 @@
+[
+  {
+    "Id": 900001,
+    "CityCode": 110000,
+    "TimePoint": "/Date(1767225600000)/",
+    "TimePointStr": "2026-01-01",
+    "Area": "北京市",
+    "AQI": "52",
+    "PM10_24h": "61",
+    "PM2_5_24h": "31",
+    "SO2_24h": "4",
+    "CO_24h": "0.6",
+    "NO2_24h": "20",
+    "O3_8h_24h": "88",
+    "PrimaryPollutant": "细颗粒物(PM2.5)",
+    "Quality": "良",
+    "Unheathful": "极少数异常敏感人群应减少户外活动",
+    "Measure": "建议适量减少户外活动",
+    "_fixture_notice": "synthetic test data"
+  }
+]
