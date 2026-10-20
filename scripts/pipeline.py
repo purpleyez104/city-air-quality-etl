@@ -20,6 +20,8 @@ def run_etl(repository: MySQLRepository, batch_id: str | None = None) -> dict[st
         rows = repository.fetch_raw(batch_id)
         normalized = [(int(row["raw_id"]), _from_raw_row(row)) for row in rows]
         selected, duplicate_issues = deduplicate_records(normalized)
+        existing_lineage = repository.fetch_clean_lineage()
+        merge_stats = _classify_merge(selected, existing_lineage)
         clean, issues = clean_records(selected)
         issues = duplicate_issues + issues
         output_count = repository.upsert_clean(run_id, clean)
@@ -28,12 +30,39 @@ def run_etl(repository: MySQLRepository, batch_id: str | None = None) -> dict[st
         return {
             "run_id": run_id, "input_count": len(rows),
             "output_count": output_count, "issue_count": issue_count,
+            **merge_stats,
         }
     except Exception as exc:
         try:
             repository.fail_run(run_id, str(exc))
         finally:
             raise
+
+
+def _classify_merge(
+    selected: list[tuple[int, NormalizedAirQualityRecord]],
+    existing_lineage: dict[tuple[str, Any], int],
+) -> dict[str, int]:
+    """按 Clean 业务键与来源血缘区分新增、替换和不变 Upsert。"""
+
+    stats = {
+        "new_key_count": 0,
+        "overlap_key_count": 0,
+        "changed_source_count": 0,
+        "unchanged_source_count": 0,
+    }
+    for raw_id, record in selected:
+        key = (record.city, record.business_date)
+        previous_raw_id = existing_lineage.get(key)
+        if previous_raw_id is None:
+            stats["new_key_count"] += 1
+            continue
+        stats["overlap_key_count"] += 1
+        if previous_raw_id == raw_id:
+            stats["unchanged_source_count"] += 1
+        else:
+            stats["changed_source_count"] += 1
+    return stats
 
 
 def _from_raw_row(row: dict[str, Any]) -> NormalizedAirQualityRecord:
@@ -55,4 +84,8 @@ def _from_raw_row(row: dict[str, Any]) -> NormalizedAirQualityRecord:
         so2=decimal("so2"), co=decimal("co"), no2=decimal("no2"), o3=decimal("o3"),
         primary_pollutant=row.get("primary_pollutant"), quality=row.get("quality"),
         health_advice=row.get("health_advice"), activity_advice=row.get("activity_advice"),
+        source_type=str(row.get("source_type") or "cnemc_api"),
+        source_record_key=row.get("source_record_key"),
+        observation_hour=row.get("observation_hour"),
+        source_file=row.get("source_file"),
     )

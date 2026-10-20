@@ -1,11 +1,27 @@
 # 数据来源基线
 
-> 状态：AQADR 只读盘点与五城市最小 Source Probe 已完成；不代表长期接口稳定性、字段正式单位或 MySQL 已验收。  
-> 盘点与复核日期：2026-10-15～2026-10-18（Asia/Shanghai）
+> 状态：AQADR 只读盘点、五城市 Source Probe 与 2025 年历史 CSV 验收已完成。
+> 盘点与复核日期：2026-10-15～2026-10-20（Asia/Shanghai）
 
 ## 当前结论
 
-AQADR 只作为当前项目的只读参考。历史 MySQL 数据已因本地数据库重装而丢失，当前项目采用 Raw JSON + MySQL 双层 Raw Baseline。2026-10-18 经明确授权完成北京、上海、广州、成都、武汉五次最小 Source Probe：均返回 HTTP 200 和 14 条记录，共 70 条，五个 Snapshot 的 Manifest、SHA-256、记录数和必要字段 Contract 均已复核。该结果只证明本次请求成功，不能外推为完整历史范围、长期稳定性或正式字段单位证明。
+AQADR 只作为当前项目的只读参考。项目以 QuotSoft 2025 年 CSV 初始化历史数据，并使用现有 CNEMC 候选 API 采集后续增量。2026-10-18 的五城市 Probe 共返回 70 条；2026-10-20 的历史批次生成五城市日记录 1,825 条。两类来源在 MySQL Raw 中通过稳定来源键区分，证据边界分别记录。
+
+## QuotSoft 历史 CSV 来源
+
+- 页面：https://quotsoft.net/air/
+- 页面说明全国城市数据来自中国环境监测总站，全国数据自 2014-05-13 起提供，并可能因服务器或来源问题出现缺失。
+- `china_cities_YYYYMMDD.csv` 是城市平均数据；结构为 `date / hour / type / 各城市`，采用 UTF-8。
+- 页面列出了 AQI、小时均值、24 小时均值以及 O3 8 小时滑动均值等数据类型和单位。
+- 页面欢迎分析、研究，但未发现明确的开源再分发 License；真实 CSV 只保存在 Git 忽略目录。
+
+### 2025 年数据复核
+
+- 365 个有效 CSV，136,564,155 bytes，日期连续覆盖 `2025-01-01`～`2025-12-31`。
+- 文件统一为 378 列，五城市字段存在；另有两个 `._*` 元数据文件，Loader 自动忽略。
+- 数据集整体 SHA-256：`ef9234d670e85c9751f36913cc141f2caabc98b0bd924b5ceb94c1617ecbc406`。
+- 日粒度固定优先选择 23 时；23 时 Canonical 指标行整体不存在时回退到当天最晚可用小时。
+- 转换后五城市各 365 条，共 1,825 条；20 条发生小时回退，469 个字段保持缺失。
 
 ## AQADR 只读资产
 
@@ -46,6 +62,13 @@ AQADR 只作为当前项目的只读参考。历史 MySQL 数据已因本地数�
 - 五个 Raw JSON 与 Manifest 的 SHA-256、记录数和必要字段均复核通过。
 - 实际 Snapshot 保存在 Git 忽略目录，不在文档中公开完整响应。
 
+### 2026-10-20 五城市增量复核
+
+- 五城市分别请求一次，均为 HTTP 200 和 14 条，共 70 条。
+- 每城市相对原 Clean 基线新增 `2026-10-18`、`2026-10-19` 两个业务日期，另有 12 个重叠日期。
+- 第一次增量每城 `new=2 / overlap=12 / unchanged_source=12`；重复执行每城 `new=0 / overlap=14 / unchanged_source=14`。
+- API Raw 最终 80 条，覆盖 `2026-10-04`～`2026-10-19`；Quality Log 没有因本批次增长。
+
 ## 北京 Source Probe 证据
 
 - 授权范围：仅北京 `110000`、一次 HTTPS POST；未请求其他城市，未连接 MySQL。
@@ -67,6 +90,9 @@ AQADR 只作为当前项目的只读参考。历史 MySQL 数据已因本地数�
 - Raw JSON 是原始事实，MySQL `raw_air_quality` 是可从 Snapshot 重建的结构化落地区。
 - 真实 Raw 数据默认不进入 Git；只允许经过检查的最小脱敏 Fixture 入库用于测试。
 - 非 JSON、字段不完整、超限或失败响应不能登记为成功 Snapshot，也不能进入 MySQL。
+- 历史 CSV 保持原样；Loader 在写入前校验编码、Header、文件日期、小时、指标和目标城市。
+- MySQL Raw 通过 `source_type / source_record_key` 幂等区分 CSV 与 API，并记录 `observation_hour / source_file`。
+- 历史 CSV 的空值不跨小时填充；Clean 保持 `NULL` 并生成稳定 `MISSING` 事件。
 
 ## 安全发现
 
@@ -74,7 +100,4 @@ AQADR 的已提交历史版本中存在明文数据库连接凭据。盘点与�
 
 ## 下一验证入口
 
-1. 仅使用已保存的北京 Snapshot 建立显式字段映射与规范化记录，不再请求接口。
-2. 独立实现 `/Date(...)` 到 UTC+08:00 业务日期的确定性解析，不依赖主机本地时区或响应顺序。
-3. 明确来源 `Id`、`CityCode`、`Area`、`TimePoint` 的追溯语义，并形成 MySQL 导入幂等键候选方案。
-4. 保持字段单位为 `UNKNOWN`，直到获得可靠来源字典或官方说明。
+如果未来 API 数据与历史 CSV 日期重叠，应使用专门 Fixture 和 MySQL Integration Test 验证来源优先级；当前 2025 历史数据与 2026 API 数据没有日期重叠。API 字段单位继续保持 `UNKNOWN`。

@@ -1,6 +1,8 @@
 import copy
 import json
 import unittest
+from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -45,7 +47,7 @@ class QualityTest(unittest.TestCase):
         second = clean_record(2, record)[1][0]
         self.assertEqual(first.issue_key, second.issue_key)
 
-    def test_duplicate_business_key_keeps_highest_source_id(self):
+    def test_duplicate_business_key_is_deterministic_within_same_source(self):
         first = normalize_records([self.source])[0]
         duplicate_source = copy.deepcopy(self.source)
         duplicate_source["Id"] = first.source_id + 1
@@ -55,6 +57,37 @@ class QualityTest(unittest.TestCase):
 
         self.assertEqual(selected[0][1].source_id, second.source_id)
         self.assertEqual(issues[0].issue_code, "DUPLICATE")
+
+    def test_api_wins_history_overlap_regardless_of_source_id_and_input_order(self):
+        api = replace(
+            normalize_records([self.source])[0],
+            source_id=1,
+            source_record_key="cnemc_api:110000:1",
+        )
+        history = replace(
+            api,
+            source_id=999_999_999,
+            source_type="quotsoft_history_csv",
+            source_record_key="quotsoft_history_csv:110000:2026-01-01",
+            source_time_point="2026-01-01T23:00:00+08:00",
+            observation_hour=23,
+        )
+
+        first, _ = deduplicate_records([(10, history), (11, api)])
+        reversed_result, _ = deduplicate_records([(11, api), (10, history)])
+
+        self.assertEqual(first[0][1].source_type, "cnemc_api")
+        self.assertEqual(reversed_result[0][1].source_type, "cnemc_api")
+
+    def test_rejects_unregistered_source_type(self):
+        record = replace(
+            normalize_records([self.source])[0],
+            source_type="unknown_source",
+            business_date=date(2026, 1, 1),
+        )
+
+        with self.assertRaisesRegex(ValueError, "source_type"):
+            deduplicate_records([(1, record)])
 
 
 if __name__ == "__main__":

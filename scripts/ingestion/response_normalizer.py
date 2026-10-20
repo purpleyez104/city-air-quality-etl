@@ -80,6 +80,10 @@ class NormalizedAirQualityRecord:
     quality: str | None
     health_advice: str | None
     activity_advice: str | None
+    source_type: str = "cnemc_api"
+    source_record_key: str | None = None
+    observation_hour: int | None = None
+    source_file: str | None = None
 
 
 def parse_dotnet_business_date(value: object) -> date:
@@ -209,6 +213,7 @@ def _normalize_record(
         activity_advice=_optional_text(
             record["Measure"], field="Measure", index=index
         ),
+        source_record_key=f"cnemc_api:{city_code}:{source_id}",
         **numeric_values,
     )
 

@@ -57,16 +57,21 @@ class MySQLRepository:
         """按来源城市与来源 ID 幂等导入 Raw 结构化记录。"""
         sql = """
         INSERT INTO raw_air_quality (
-          snapshot_batch_id, source_id, city_code, city, source_area, business_date,
+          snapshot_batch_id, source_type, source_record_key, source_id,
+          city_code, city, source_area, business_date, observation_hour, source_file,
           source_time_point, source_time_point_text, aqi, pm10, pm2_5, so2, co, no2, o3,
           primary_pollutant, quality, health_advice, activity_advice
         ) VALUES (
-          %(snapshot_batch_id)s, %(source_id)s, %(city_code)s, %(city)s, %(source_area)s,
-          %(business_date)s, %(source_time_point)s, %(source_time_point_text)s, %(aqi)s,
+          %(snapshot_batch_id)s, %(source_type)s, %(source_record_key)s, %(source_id)s,
+          %(city_code)s, %(city)s, %(source_area)s, %(business_date)s,
+          %(observation_hour)s, %(source_file)s, %(source_time_point)s,
+          %(source_time_point_text)s, %(aqi)s,
           %(pm10)s, %(pm2_5)s, %(so2)s, %(co)s, %(no2)s, %(o3)s,
           %(primary_pollutant)s, %(quality)s, %(health_advice)s, %(activity_advice)s
         ) AS new ON DUPLICATE KEY UPDATE
-          snapshot_batch_id=new.snapshot_batch_id, business_date=new.business_date,
+          snapshot_batch_id=new.snapshot_batch_id, source_id=new.source_id,
+          business_date=new.business_date, observation_hour=new.observation_hour,
+          source_file=new.source_file,
           aqi=new.aqi, pm10=new.pm10, pm2_5=new.pm2_5, so2=new.so2, co=new.co,
           no2=new.no2, o3=new.o3, primary_pollutant=new.primary_pollutant,
           quality=new.quality, health_advice=new.health_advice,
@@ -97,6 +102,17 @@ class MySQLRepository:
                 return list(cursor.fetchall())
         finally:
             connection.close()
+
+    def fetch_clean_lineage(self) -> dict[tuple[str, Any], int]:
+        """读取 Clean 业务键到 Raw ID 的当前映射，用于报告增量合并结果。"""
+
+        rows = self._read(
+            "SELECT city,business_date,source_raw_id FROM air_quality"
+        )
+        return {
+            (str(row["city"]), row["business_date"]): int(row["source_raw_id"])
+            for row in rows
+        }
 
     def start_run(self, run_id: str, batch_id: str | None) -> None:
         self._write_one(
@@ -160,7 +176,15 @@ class MySQLRepository:
         return len(payload)
 
     def fetch_dashboard_data(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        clean = self._read("SELECT * FROM air_quality ORDER BY city,business_date")
+        clean = self._read(
+            """
+            SELECT clean.*, raw.source_type, raw.source_record_key,
+                   raw.observation_hour, raw.source_file
+            FROM air_quality AS clean
+            JOIN raw_air_quality AS raw ON raw.raw_id=clean.source_raw_id
+            ORDER BY clean.city,clean.business_date
+            """
+        )
         issues = self._read("SELECT * FROM air_quality_quality_log ORDER BY city,business_date,field_name")
         return clean, issues
 

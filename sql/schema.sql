@@ -1,11 +1,15 @@
 CREATE TABLE IF NOT EXISTS raw_air_quality (
     raw_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     snapshot_batch_id VARCHAR(64) NOT NULL,
+    source_type VARCHAR(32) NOT NULL DEFAULT 'cnemc_api',
+    source_record_key VARCHAR(128) NOT NULL,
     source_id BIGINT NOT NULL,
     city_code VARCHAR(12) NOT NULL,
     city VARCHAR(32) NOT NULL,
     source_area VARCHAR(64) NOT NULL,
     business_date DATE NOT NULL,
+    observation_hour TINYINT UNSIGNED NULL,
+    source_file VARCHAR(255) NULL,
     source_time_point VARCHAR(64) NOT NULL,
     source_time_point_text VARCHAR(32) NULL,
     aqi DECIMAL(10, 2) NULL,
@@ -21,7 +25,7 @@ CREATE TABLE IF NOT EXISTS raw_air_quality (
     activity_advice TEXT NULL,
     loaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (raw_id),
-    UNIQUE KEY uk_raw_source (city_code, source_id),
+    UNIQUE KEY uk_raw_source_record (source_type, source_record_key),
     KEY idx_raw_business_key (city, business_date),
     KEY idx_raw_batch (snapshot_batch_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

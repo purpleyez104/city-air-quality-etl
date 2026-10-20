@@ -11,6 +11,10 @@ from typing import Iterable
 from scripts.ingestion.response_normalizer import NormalizedAirQualityRecord
 
 NUMERIC_FIELDS = ("aqi", "pm10", "pm2_5", "so2", "co", "no2", "o3")
+SOURCE_PRIORITY = {
+    "quotsoft_history_csv": 10,
+    "cnemc_api": 20,
+}
 
 
 @dataclass(frozen=True)
@@ -97,10 +101,14 @@ def clean_records(
 def deduplicate_records(
     records: Iterable[tuple[int, NormalizedAirQualityRecord]],
 ) -> tuple[list[tuple[int, NormalizedAirQualityRecord]], list[QualityIssue]]:
-    """按业务键确定性保留最大来源 ID，并为冲突生成质量事件。
+    """按显式来源优先级选择 Clean Record，并为冲突生成质量事件。
 
-    Raw 层仍保留全部来源记录。来源没有可靠更新时间字段，因此最大来源 ID
-    只是可复现的工程规则，不代表数据源业务上的“最新版本”。
+    Raw 层仍保留全部来源记录。同一业务日期同时存在历史 CSV 与 API 时，API
+    明确优先；同来源内再按来源时间点、稳定来源键和 Raw ID 确定性排序。选择
+    结果不依赖输入顺序，也不借用 ``source_id`` 大小表达业务优先级。
+
+    Raises:
+        ValueError: Raw Record 含未登记的 ``source_type``。
     """
     grouped: dict[tuple[str, date], list[tuple[int, NormalizedAirQualityRecord]]] = {}
     for item in records:
@@ -109,10 +117,26 @@ def deduplicate_records(
     selected: list[tuple[int, NormalizedAirQualityRecord]] = []
     issues: list[QualityIssue] = []
     for (city, business_date), candidates in sorted(grouped.items()):
-        ordered = sorted(candidates, key=lambda item: (item[1].source_id, item[0]))
+        unknown_types = sorted(
+            {item[1].source_type for item in candidates}.difference(SOURCE_PRIORITY)
+        )
+        if unknown_types:
+            raise ValueError("未登记的 Raw source_type: " + ", ".join(unknown_types))
+        ordered = sorted(
+            candidates,
+            key=lambda item: (
+                SOURCE_PRIORITY[item[1].source_type],
+                item[1].source_time_point,
+                item[1].source_record_key or "",
+                item[0],
+            ),
+        )
         selected.append(ordered[-1])
         if len(ordered) > 1:
-            source_ids = ",".join(str(item[1].source_id) for item in ordered)
+            source_ids = ",".join(
+                f"{item[1].source_type}:{item[1].source_record_key or item[1].source_id}"
+                for item in ordered
+            )
             issues.append(_issue(
                 city, business_date, "business_key", "DUPLICATE", source_ids
             ))

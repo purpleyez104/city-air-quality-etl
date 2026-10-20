@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from scripts.config import ConfigurationError, load_mysql_settings
+from scripts.ingestion.history_csv_loader import load_history_csv
 from scripts.ingestion.snapshot_loader import load_snapshot
 from scripts.ingestion.source_probe import CITY_NAMES_BY_CODE, SourceProbeError, run_probe
 from scripts.pipeline import run_etl
@@ -25,6 +26,14 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--output-dir", type=Path, default=Path("data/raw"))
     load = commands.add_parser("load", help="校验 Snapshot 并导入 Raw 层")
     load.add_argument("--batch-dir", type=Path, required=True)
+    validate_history = commands.add_parser(
+        "validate-history", help="校验历史 CSV 并输出转换统计，不连接数据库"
+    )
+    validate_history.add_argument("--input-dir", type=Path, required=True)
+    load_history = commands.add_parser(
+        "load-history", help="校验历史 CSV 并幂等导入 Raw 层"
+    )
+    load_history.add_argument("--input-dir", type=Path, required=True)
     run = commands.add_parser("run", help="执行 Raw 到 Clean 的 ETL")
     run.add_argument("--batch-id")
     report = commands.add_parser("report", help="从 Clean 层生成 Dashboard")
@@ -64,6 +73,11 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False))
             return 0
 
+        if args.command == "validate-history":
+            result = load_history_csv(args.input_dir)
+            print(json.dumps(_history_summary(result), ensure_ascii=False))
+            return 0
+
         repository = MySQLRepository(load_mysql_settings())
         if args.command == "init":
             repository.initialize_schema(Path("sql/schema.sql"))
@@ -71,7 +85,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "load":
             batch_id, records = load_snapshot(args.batch_dir)
             count = repository.upsert_raw(batch_id, records)
-            print(json.dumps({"batch_id": batch_id, "loaded_count": count}, ensure_ascii=False))
+            print(json.dumps({"batch_id": batch_id, "upserted_count": count}, ensure_ascii=False))
+        elif args.command == "load-history":
+            result = load_history_csv(args.input_dir)
+            count = repository.upsert_raw(result.batch_id, result.records)
+            summary = _history_summary(result)
+            summary["upserted_count"] = count
+            print(json.dumps(summary, ensure_ascii=False))
         elif args.command == "run":
             print(json.dumps(run_etl(repository, args.batch_id), ensure_ascii=False))
         elif args.command == "report":
@@ -82,6 +102,22 @@ def main(argv: list[str] | None = None) -> int:
     except (ConfigurationError, RepositoryError, SourceProbeError, ValueError, OSError) as exc:
         print(f"执行失败: {exc}", file=sys.stderr)
         return 1
+
+
+def _history_summary(result) -> dict[str, object]:
+    """输出紧凑且可序列化的历史转换证据，不包含实际污染物数据。"""
+
+    return {
+        "batch_id": result.batch_id,
+        "file_count": result.file_count,
+        "record_count": len(result.records),
+        "date_min": result.date_min.isoformat(),
+        "date_max": result.date_max.isoformat(),
+        "fallback_count": result.fallback_count,
+        "missing_value_count": result.missing_value_count,
+        "source_bytes": result.source_bytes,
+        "source_sha256": result.source_sha256,
+    }
 
 
 if __name__ == "__main__":
