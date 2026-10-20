@@ -22,7 +22,7 @@ class MySQLRepository:
         self.settings = settings
 
     def connect(self):
-        """创建显式事务连接；调用方负责关闭。"""
+        """创建事务连接，连接关闭由调用方负责。"""
         try:
             import pymysql
             from pymysql.cursors import DictCursor

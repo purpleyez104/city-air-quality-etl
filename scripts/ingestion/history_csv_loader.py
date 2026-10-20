@@ -1,4 +1,4 @@
-"""将 QuotSoft 全国城市小时 CSV 转换为五城市日粒度 Raw Record。"""
+"""将 QuotSoft 全国城市小时 CSV 转换为五城市日粒度原始记录。"""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ SOURCE_AREA_BY_NAME = {city: area for _, (city, area) in CITY_CONTRACT.items()}
 
 
 class HistoryCsvError(ValueError):
-    """表示历史 CSV 不满足当前项目确认的数据 Contract。"""
+    """表示历史 CSV 不符合项目要求的数据格式。"""
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ class HistoryLoadResult:
 def load_history_csv(input_dir: Path) -> HistoryLoadResult:
     """校验目录内全部日文件并转换，不访问网络或数据库。
 
-    每个城市每天固定优先 23 时。只有 23 时的 Canonical 指标行全部不存在时，
+    每个城市每天固定优先 23 时。只有 23 时的目标指标行全部不存在时，
     才回退到当天存在指标行的最晚小时。字段空值保留为 ``None``，不跨小时填充。
 
     Raises:
@@ -127,7 +127,7 @@ def load_history_csv(input_dir: Path) -> HistoryLoadResult:
             hour_values[metric_type] = row
 
         if not by_hour:
-            raise HistoryCsvError(f"文件没有 Canonical 指标: {path}")
+            raise HistoryCsvError(f"文件没有目标指标: {path}")
         selected_hour = TARGET_HOUR if TARGET_HOUR in by_hour else max(by_hour)
         is_fallback = selected_hour != TARGET_HOUR
         values_at_hour = by_hour[selected_hour]

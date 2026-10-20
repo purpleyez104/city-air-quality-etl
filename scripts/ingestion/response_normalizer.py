@@ -1,4 +1,4 @@
-"""将已保存的来源响应转换为确定性的 Canonical Record。
+"""将已保存的 API 响应转换为统一格式的空气质量记录。
 
 本模块只处理内存中的 JSON 记录，不访问网络、文件系统或数据库。所有记录
 通过校验后才返回结果；任一记录失败时调用方不会得到部分可导入数据。
@@ -51,7 +51,7 @@ REQUIRED_SOURCE_FIELDS = frozenset(
 
 
 class ResponseNormalizationError(ValueError):
-    """表示来源记录不满足已校准的响应 Contract。"""
+    """表示来源记录不符合已确认的响应格式。"""
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,7 @@ class NormalizedAirQualityRecord:
     """可供后续 Raw Loader 使用的日级规范化记录。
 
     数值字段使用 ``Decimal``，避免在写入 MySQL 前引入二进制浮点误差。
-    当前阶段不附加污染物单位，因为可靠单位证据仍为 ``UNKNOWN``。
+    当前不附加污染物单位，因为尚未找到可靠的接口字段说明。
     """
 
     source_id: int
@@ -87,10 +87,10 @@ class NormalizedAirQualityRecord:
 
 
 def parse_dotnet_business_date(value: object) -> date:
-    """将 ``/Date(epoch_ms)/`` 确定性转换为 UTC+08:00 业务日期。
+    """将 ``/Date(epoch_ms)/`` 转换为 UTC+08:00 业务日期。
 
     Microsoft JSON Date 中的毫秒数表示 UTC Epoch；可选的 ``+0800`` 后缀仅是
-    显示偏移，不参与 Epoch 计算。显式固定 UTC+08:00 可避免依赖主机时区，且
+    显示偏移，不参与 Epoch 计算。固定使用 UTC+08:00 可避免依赖主机时区，且
     当前项目只处理现代中国空气质量数据，不需要历史夏令时规则。
 
     Raises:
@@ -124,7 +124,7 @@ def parse_dotnet_business_date(value: object) -> date:
 def normalize_records(
     records: Sequence[Mapping[str, object]],
 ) -> list[NormalizedAirQualityRecord]:
-    """校验并规范化一个来源批次，按业务日期和来源 ID 确定性排序。
+    """校验并统一一个来源批次，按业务日期和来源 ID 排序。
 
     同一批次中的 ``Id`` 或 ``(city, business_date)`` 重复会整体失败。当前没有
     可靠证据支持静默选择某一条，因此将冲突留给后续 Raw Schema 决策处理。

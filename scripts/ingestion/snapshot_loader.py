@@ -1,4 +1,4 @@
-"""读取并校验 Raw Snapshot，返回 Canonical Record。"""
+"""读取并校验原始快照，返回统一格式的空气质量记录。"""
 
 from __future__ import annotations
 

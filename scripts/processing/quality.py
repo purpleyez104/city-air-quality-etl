@@ -1,4 +1,4 @@
-"""清洗 Canonical Record，并生成可幂等写入的数据质量事件。"""
+"""清洗统一格式的空气质量记录，并生成可重复写入的质量问题。"""
 
 from __future__ import annotations
 
@@ -101,14 +101,14 @@ def clean_records(
 def deduplicate_records(
     records: Iterable[tuple[int, NormalizedAirQualityRecord]],
 ) -> tuple[list[tuple[int, NormalizedAirQualityRecord]], list[QualityIssue]]:
-    """按显式来源优先级选择 Clean Record，并为冲突生成质量事件。
+    """按来源优先级选择清洗记录，并为重复业务键生成质量问题。
 
-    Raw 层仍保留全部来源记录。同一业务日期同时存在历史 CSV 与 API 时，API
-    明确优先；同来源内再按来源时间点、稳定来源键和 Raw ID 确定性排序。选择
-    结果不依赖输入顺序，也不借用 ``source_id`` 大小表达业务优先级。
+    Raw 层保留全部来源记录。同一业务日期同时存在历史 CSV 与 API 时优先
+    使用 API；同一来源内再按数据时间、来源键和 Raw ID 排序，避免上游返回
+    顺序影响结果。
 
     Raises:
-        ValueError: Raw Record 含未登记的 ``source_type``。
+        ValueError: 原始记录包含未登记的 ``source_type``。
     """
     grouped: dict[tuple[str, date], list[tuple[int, NormalizedAirQualityRecord]]] = {}
     for item in records:

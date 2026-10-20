@@ -201,7 +201,7 @@ def _build_charts(clean, issues, city_summary, monthly_summary, px, to_html):
     source_chart = px.bar(
         source_counts, x="source_label", y="size", color="source_label",
         labels={"source_label": "Clean 来源", "size": "记录数"},
-        title="Clean Record 来源构成",
+        title="清洗数据来源构成",
     )
     source_chart.update_layout(height=420, margin={"l": 48, "r": 20, "t": 54, "b": 44})
 
@@ -242,7 +242,7 @@ def _aqi_band(series):
 
 def _render_dashboard(metrics: dict[str, Any], charts: dict[str, str]) -> str:
     cards = (
-        ("Clean Records", f"{metrics['record_count']:,}"),
+        ("清洗记录", f"{metrics['record_count']:,}"),
         ("城市", str(metrics["city_count"])),
         ("日期范围", f"{metrics['date_min']}<br>— {metrics['date_max']}"),
         ("有效 AQI", f"{metrics['valid_aqi_count']:,}"),
@@ -294,7 +294,7 @@ def _render_markdown(metrics: dict[str, Any], city_summary, clean) -> str:
     )
     return (
         "# 空气质量 ETL 运行报告\n\n"
-        f"- Clean Record：{metrics['record_count']}\n"
+        f"- 清洗记录：{metrics['record_count']}\n"
         f"- 城市数：{metrics['city_count']}\n"
         f"- 日期范围：{metrics['date_min']} 至 {metrics['date_max']}\n"
         f"- AQI 有效样本：{metrics['valid_aqi_count']}\n"

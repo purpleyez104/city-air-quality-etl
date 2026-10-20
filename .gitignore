@@ -32,3 +32,10 @@ logs/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local AI collaboration and detailed execution records
+AGENTS.md
+docs/status/current.md
+docs/acceptance/2026-10-20-history-raw-clean.md
+docs/acceptance/2026-10-20-api-incremental.md
+docs/acceptance/2026-10-20-annual-dashboard.md
